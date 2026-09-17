@@ -5,7 +5,8 @@
 from microbit import *
 
 mode = "dots"
-shown_text = None
+last_print = 0
+scroll_until = 0
 
 def show_celsius(t):
     if t < 0:
@@ -25,16 +26,20 @@ display.clear()
 
 while True:
     t = temperature()
-    print("temp,{}".format(t))
+    now = running_time()
+    if now - last_print >= 500:
+        print("temp,{}".format(t))
+        last_print = now
     if button_a.was_pressed():
         mode = "text"
-        shown_text = None
+        scroll_until = 0
     if button_b.was_pressed():
         mode = "dots"
-        shown_text = None
+        scroll_until = 0
+        display.clear()
     if mode == "dots":
         show_celsius(t)
-    elif t != shown_text:
-        display.scroll(str(t), delay=80, wait=False, loop=True)
-        shown_text = t
-    sleep(500)
+    elif now >= scroll_until:
+        display.scroll(str(t), delay=80, wait=False)
+        scroll_until = now + 80 * 5 * (len(str(t)) + 2)
+    sleep(50)
