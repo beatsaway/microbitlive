@@ -11,5 +11,6 @@ hex_data = microbit_fs.add_files(
     [microbit_fs.File.from_text("main.py", source)],
 )
 output = root / "temperature-logger.hex"
-output.write_text(hex_data, encoding="ascii", newline="\n")
+with output.open("w", encoding="ascii", newline="\n") as f:
+    f.write(hex_data)
 print("Wrote", output)
