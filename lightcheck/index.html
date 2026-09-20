@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Temperature check</title>
+  <title>Light check</title>
   <style>
     :root {
       --ink: #1a1a1a;
@@ -89,8 +89,8 @@
     .now-emoji { font-size: 22px; line-height: 1; }
     .status strong { font-size: 22px; }
     .status.ok strong { color: #12b76a; }
-    .status.hot strong { color: #f04438; }
-    .status.cold strong { color: #22d3ee; }
+    .status.bright strong { color: #f04438; }
+    .status.dark strong { color: #22d3ee; }
     .page {
       max-width: 1100px;
       margin: 0 auto;
@@ -277,16 +277,16 @@
   <div class="page">
   <section class="paper">
     <div class="title-wrap">
-      <h1 id="graphTitle" contenteditable="true" spellcheck="false">Temperature check</h1>
+      <h1 id="graphTitle" contenteditable="true" spellcheck="false">Light check</h1>
     </div>
     <div class="graph-wrap">
-      <button type="button" class="y-label" id="yLabel">Temperature (°C)</button>
+      <button type="button" class="y-label" id="yLabel">Light (0–255)</button>
       <div class="y-panel" id="yPanel">
-        <label>Min <span id="minVal">5</span>
-          <input type="range" id="minSlider" min="-10" max="20" value="5" />
+        <label>Min <span id="minVal">0</span>
+          <input type="range" id="minSlider" min="0" max="200" value="0" />
         </label>
-        <label>Max <span id="maxVal">70</span>
-          <input type="range" id="maxSlider" min="25" max="100" value="70" />
+        <label>Max <span id="maxVal">255</span>
+          <input type="range" id="maxSlider" min="55" max="255" value="255" />
         </label>
       </div>
       <canvas id="graph" width="1000" height="520"></canvas>
@@ -314,7 +314,7 @@
     <div class="help-card" id="helpCard">
       <h2>How to use</h2>
       <ol>
-        <li>Download <a href="../templog/temperature-logger.hex" download="temperature-logger.hex">temperature-logger.hex</a></li>
+        <li>Download <a href="../lightlog/light-logger.hex" download="light-logger.hex">light-logger.hex</a></li>
         <li>Plug in a micro:bit V2. A <strong>MICROBIT</strong> drive should appear.</li>
         <li>Drag the hex file onto that drive and wait for it to finish.</li>
         <li>Open this page in <strong>Chrome</strong> or <strong>Edge</strong>.</li>
@@ -367,16 +367,16 @@
       points: [],
       latestTemp: null,
       intervalSec: 1,
-      yMin: 5,
-      yMax: 70,
+      yMin: 0,
+      yMax: 255,
     };
 
     function titleText() {
-      return (els.graphTitle.textContent || "").replace(/\s+/g, " ").trim() || "Temperature check";
+      return (els.graphTitle.textContent || "").replace(/\s+/g, " ").trim() || "Light check";
     }
 
     function fileStem() {
-      return titleText().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "temperature-check";
+      return titleText().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "light-check";
     }
 
     function setError(message) {
@@ -430,9 +430,9 @@
       return ticks;
     }
 
-    function statusForTemp(temp) {
-      if (temp > 40) return { kind: "hot", emoji: "🥵" };
-      if (temp < 20) return { kind: "cold", emoji: "🥶" };
+    function statusForLight(level) {
+      if (level > 200) return { kind: "bright", emoji: "☀️" };
+      if (level < 50) return { kind: "dark", emoji: "🌑" };
       return { kind: "ok", emoji: "🙂" };
     }
 
@@ -443,7 +443,7 @@
     function parseTemp(line) {
       const trimmed = line.trim();
       if (!trimmed) return null;
-      const tagged = trimmed.match(/^temp\s*,\s*(-?\d+(?:\.\d+)?)\s*$/i);
+      const tagged = trimmed.match(/^light\s*,\s*(-?\d+(?:\.\d+)?)\s*$/i);
       if (tagged) return Number(tagged[1]);
       const bare = trimmed.match(/^(-?\d+(?:\.\d+)?)$/);
       if (bare) return Number(bare[1]);
@@ -518,7 +518,7 @@
         ctx.save();
         ctx.translate(22, (plot.top + plot.bottom) / 2);
         ctx.rotate(-Math.PI / 2);
-        ctx.fillText("Temperature (°C)", 0, 0);
+        ctx.fillText("Light (0–255)", 0, 0);
         ctx.restore();
       }
 
@@ -527,7 +527,7 @@
         ctx.font = "16px Segoe UI, Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("Press Log to plot temperature", (plot.left + plot.right) / 2, (plot.top + plot.bottom) / 2);
+        ctx.fillText("Press Log to plot light", (plot.left + plot.right) / 2, (plot.top + plot.bottom) / 2);
         return;
       }
 
@@ -589,12 +589,12 @@
     function updateNowDisplay() {
       const hasTemp = state.latestTemp !== null;
       els.nowStatus.classList.toggle("hidden", !hasTemp);
-      els.nowStatus.classList.remove("hot", "cold", "ok");
+      els.nowStatus.classList.remove("bright", "dark", "ok");
       if (hasTemp) {
-        const status = statusForTemp(state.latestTemp);
+        const status = statusForLight(state.latestTemp);
         els.nowStatus.classList.add(status.kind);
         els.nowEmoji.textContent = status.emoji;
-        els.liveTemp.textContent = formatTemp(state.latestTemp) + " °C";
+        els.liveTemp.textContent = formatTemp(state.latestTemp);
       }
     }
 
@@ -724,7 +724,7 @@
     }
 
     function saveCsv() {
-      const rows = ["time_s,temperature_c,clock_time"];
+      const rows = ["time_s,light,clock_time"];
       for (const p of state.points) {
         rows.push([p.t.toFixed(2), p.temp, p.at.toLocaleTimeString([], { hour12: false })].join(","));
       }
@@ -757,8 +757,10 @@
     }
 
     function syncRangeSliders() {
-      const min = Math.min(20, Number(els.minSlider.value));
-      const max = Math.max(25, Math.min(100, Number(els.maxSlider.value)));
+      let min = Number(els.minSlider.value);
+      let max = Number(els.maxSlider.value);
+      if (min >= max) max = Math.min(255, min + 5);
+      if (min >= max) min = Math.max(0, max - 5);
       els.minSlider.value = String(min);
       els.maxSlider.value = String(max);
       state.yMin = min;

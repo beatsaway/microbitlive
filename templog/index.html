@@ -46,13 +46,18 @@
     }
     button:disabled { opacity: 0.35; cursor: not-allowed; }
     #recordBtn {
-      background: var(--start);
+      background: transparent;
       color: #fff;
       font-weight: 400;
       font-size: 18px;
       line-height: 1.4;
+      animation: pulse 1.4s ease-in-out infinite;
     }
-    #recordBtn.recording { background: var(--stop); }
+    #recordBtn.recording { background: transparent; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
     #saveBtn {
       background: transparent;
       color: var(--header-ink);
@@ -77,11 +82,15 @@
     .status {
       display: flex;
       align-items: center;
+      gap: 6px;
       padding: 0 10px 0 8px;
-      color: var(--header-muted);
       font-size: 18px;
     }
-    .status strong { color: var(--header-ink); margin-left: 10px; font-size: 22px; }
+    .now-emoji { font-size: 22px; line-height: 1; }
+    .status strong { font-size: 22px; }
+    .status.ok strong { color: #12b76a; }
+    .status.hot strong { color: #f04438; }
+    .status.cold strong { color: #22d3ee; }
     .page {
       max-width: 1100px;
       margin: 0 auto;
@@ -252,7 +261,7 @@
 <body>
   <div class="toolbar">
     <div class="status hidden" id="nowStatus">
-      Now<strong id="liveTemp"></strong>
+      <span class="now-emoji" id="nowEmoji"></span><strong id="liveTemp"></strong>
     </div>
     <button type="button" id="recordBtn">Log</button>
     <div class="menu-wrap hidden" id="saveWrap">
@@ -332,6 +341,7 @@
       helpCard: document.getElementById("helpCard"),
       closeHelp: document.getElementById("closeHelp"),
       liveTemp: document.getElementById("liveTemp"),
+      nowEmoji: document.getElementById("nowEmoji"),
       nowStatus: document.getElementById("nowStatus"),
       errorText: document.getElementById("errorText"),
       graph: document.getElementById("graph"),
@@ -418,6 +428,12 @@
       if (!ticks.length || ticks[0] !== min) ticks.unshift(min);
       if (ticks[ticks.length - 1] !== max) ticks.push(max);
       return ticks;
+    }
+
+    function statusForTemp(temp) {
+      if (temp > 40) return { kind: "hot", emoji: "🥵" };
+      if (temp < 20) return { kind: "cold", emoji: "🥶" };
+      return { kind: "ok", emoji: "🙂" };
     }
 
     function formatTemp(temp) {
@@ -573,7 +589,11 @@
     function updateNowDisplay() {
       const hasTemp = state.latestTemp !== null;
       els.nowStatus.classList.toggle("hidden", !hasTemp);
+      els.nowStatus.classList.remove("hot", "cold", "ok");
       if (hasTemp) {
+        const status = statusForTemp(state.latestTemp);
+        els.nowStatus.classList.add(status.kind);
+        els.nowEmoji.textContent = status.emoji;
         els.liveTemp.textContent = formatTemp(state.latestTemp) + " °C";
       }
     }
