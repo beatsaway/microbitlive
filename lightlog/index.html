@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Light graph</title>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #667085;
+      --line: #d0d5dd;
+      --start: #12b76a;
+      --stop: #f04438;
+      --bg: #f7f8fa;
+      --header: #1a1e24;
+      --header-ink: #e8eaed;
+      --header-muted: #9aa0a6;
+      --graph-ink: #1a1a1a;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.4 "Segoe UI", Arial, sans-serif;
+    }
+    .toolbar {
+      display: flex;
+      gap: 0;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+      min-height: 32px;
+      background: var(--header);
+      border-bottom: 1px solid #2c323c;
+    }
+    .toolbar > button,
+    .toolbar .menu-wrap > button {
+      font: 700 14px/1 "Segoe UI", Arial, sans-serif;
+      border: 0;
+      border-radius: 0;
+      padding: 0 10px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    #recordBtn {
+      background: var(--start);
+      color: #fff;
+      font-weight: 400;
+      font-size: 18px;
+      line-height: 1.4;
+    }
+    #recordBtn.recording { background: var(--stop); }
+    #saveBtn {
+      background: transparent;
+      color: var(--header-ink);
+      font-weight: 400;
+      font-size: 18px;
+      line-height: 1.4;
+    }
+    #saveBtn:hover { background: rgba(255, 255, 255, 0.06); }
+    #helpBtn {
+      width: 40px;
+      margin-left: auto;
+      padding: 0;
+      background: transparent;
+      color: var(--header-ink);
+      font-weight: 400;
+      font-size: 22px;
+      border: 0;
+    }
+    #helpBtn:hover { background: rgba(255, 255, 255, 0.06); }
+    .menu-wrap { display: flex; }
+    .menu-wrap.hidden, .status.hidden { display: none; }
+    .status {
+      display: flex;
+      align-items: center;
+      padding: 0 10px 0 8px;
+      color: var(--header-muted);
+      font-size: 18px;
+    }
+    .status strong { color: var(--header-ink); margin-left: 10px; font-size: 22px; }
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px 16px 24px;
+    }
+    .paper {
+      background: #fff;
+      border: 1px solid #d0d5dd;
+      border-radius: 16px;
+      padding: 22px 22px 16px;
+    }
+    .title-wrap { text-align: center; margin-bottom: 8px; }
+    #graphTitle {
+      display: inline-block;
+      min-width: 8ch;
+      max-width: 100%;
+      margin: 0;
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.2;
+      outline: none;
+      color: var(--graph-ink);
+    }
+    #graphTitle:hover { background: #f5f7fa; }
+    #graphTitle:focus {
+      background: #fff;
+      border-color: #2f6feb;
+      box-shadow: 0 0 0 3px rgba(47, 111, 235, 0.15);
+    }
+    .graph-wrap {
+      position: relative;
+      padding-left: 36px;
+      background: #fff;
+      border-radius: 12px;
+    }
+    canvas { width: 100%; height: 520px; display: block; }
+    .y-label, .x-label {
+      position: absolute;
+      background: transparent;
+      color: var(--graph-ink);
+      font: 700 15px/1 "Segoe UI", Arial, sans-serif;
+      padding: 10px 8px;
+      border-radius: 8px;
+      white-space: nowrap;
+      cursor: pointer;
+      border: 0;
+      z-index: 2;
+    }
+    .y-label {
+      left: 2px;
+      top: 50%;
+      transform: translateY(-50%) rotate(180deg);
+      writing-mode: vertical-rl;
+    }
+    .x-label {
+      left: 50%;
+      bottom: 6px;
+      transform: translateX(-50%);
+    }
+    .y-label:hover, .y-label:focus,
+    .x-label:hover, .x-label:focus { background: #f5f7fa; }
+    .y-panel, .x-panel {
+      display: none;
+      position: absolute;
+      width: 210px;
+      background: #fff;
+      border: 1px solid #d0d5dd;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+      padding: 12px;
+      z-index: 3;
+    }
+    .y-panel {
+      left: 40px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    .x-panel {
+      left: 50%;
+      bottom: 44px;
+      transform: translateX(-50%);
+    }
+    .y-panel.open, .x-panel.open { display: block; }
+    .y-panel label, .x-panel label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #667085;
+      margin-bottom: 10px;
+    }
+    .y-panel label:last-child, .x-panel label:last-child { margin-bottom: 0; }
+    .y-panel span, .x-panel span { float: right; color: var(--graph-ink); }
+    .y-panel input[type="range"],
+    .x-panel select { width: 100%; margin-top: 6px; }
+    .x-panel select {
+      font: 14px "Segoe UI", Arial, sans-serif;
+      padding: 6px 8px;
+      border: 1px solid #d0d5dd;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--graph-ink);
+    }
+    .menu-wrap { position: relative; }
+    .save-menu {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 8px);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+      padding: 6px;
+      min-width: 220px;
+      display: none;
+      z-index: 5;
+    }
+    .save-menu.open { display: block; }
+    .save-menu button {
+      width: 100%;
+      background: #fff;
+      color: var(--ink);
+      font-weight: 600;
+      font-size: 13px;
+      text-align: left;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    .save-menu button:hover { background: #f5f7fa; }
+    .error { color: var(--stop); min-height: 1.2em; margin: 10px 0 0; }
+    .help-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 24, 40, 0.45);
+      z-index: 20;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .help-overlay.open { display: flex; }
+    .help-card {
+      width: min(520px, 100%);
+      background: #fff;
+      border-radius: 16px;
+      padding: 22px 24px 18px;
+      box-shadow: 0 16px 40px rgba(16, 24, 40, 0.18);
+    }
+    .help-card h2 { margin: 0 0 12px; font-size: 22px; }
+    .help-card ol { margin: 0 0 16px; padding-left: 20px; color: var(--muted); }
+    .help-card li { margin: 0 0 8px; }
+    .help-card a { color: #2f6feb; font-weight: 700; }
+    .help-card .close-help {
+      background: #1a1a1a;
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="status hidden" id="nowStatus">
+      Now<strong id="liveTemp"></strong>
+    </div>
+    <button type="button" id="recordBtn">Log</button>
+    <div class="menu-wrap hidden" id="saveWrap">
+      <button type="button" id="saveBtn">Save</button>
+      <div class="save-menu" id="saveMenu">
+        <button id="saveCsvBtn" type="button">Save as CSV</button>
+        <button id="savePngBtn" type="button">Save as image</button>
+      </div>
+    </div>
+    <button type="button" id="helpBtn" aria-label="Help">?</button>
+  </div>
+
+  <div class="page">
+  <section class="paper">
+    <div class="title-wrap">
+      <h1 id="graphTitle" contenteditable="true" spellcheck="false">Light over time</h1>
+    </div>
+    <div class="graph-wrap">
+      <button type="button" class="y-label" id="yLabel">Light (0–255)</button>
+      <div class="y-panel" id="yPanel">
+        <label>Min <span id="minVal">0</span>
+          <input type="range" id="minSlider" min="0" max="200" value="0" />
+        </label>
+        <label>Max <span id="maxVal">255</span>
+          <input type="range" id="maxSlider" min="55" max="255" value="255" />
+        </label>
+      </div>
+      <canvas id="graph" width="1000" height="520"></canvas>
+      <button type="button" class="x-label" id="xLabel">Time (s)</button>
+      <div class="x-panel" id="xPanel">
+        <label>Log every
+          <select id="rateSelect">
+            <option value="0.5">0.5 s</option>
+            <option value="1" selected>1 s</option>
+            <option value="2">2 s</option>
+            <option value="5">5 s</option>
+            <option value="10">10 s</option>
+            <option value="20">20 s</option>
+            <option value="30">30 s</option>
+            <option value="60">60 s</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </section>
+  <p class="error" id="errorText"></p>
+  </div>
+
+  <div class="help-overlay" id="helpOverlay">
+    <div class="help-card" id="helpCard">
+      <h2>How to use</h2>
+      <ol>
+        <li>Download <a href="light-logger.hex" download="light-logger.hex">light-logger.hex</a></li>
+        <li>Plug in a micro:bit V2. A <strong>MICROBIT</strong> drive should appear.</li>
+        <li>Drag the hex file onto that drive and wait for it to finish.</li>
+        <li>Open this page in <strong>Chrome</strong> or <strong>Edge</strong>.</li>
+        <li>Press <strong>Log</strong> and pick the micro:bit serial port.</li>
+        <li>Press <strong>Stop</strong>, then <strong>Save</strong> for a CSV or image.</li>
+      </ol>
+      <button type="button" class="close-help" id="closeHelp">Close</button>
+    </div>
+  </div>
+
+  <script>
+    const MICROBIT = { usbVendorId: 0x0d28, usbProductId: 0x0204 };
+    const BAUD = 115200;
+
+    const els = {
+      recordBtn: document.getElementById("recordBtn"),
+      saveWrap: document.getElementById("saveWrap"),
+      saveBtn: document.getElementById("saveBtn"),
+      saveMenu: document.getElementById("saveMenu"),
+      saveCsvBtn: document.getElementById("saveCsvBtn"),
+      savePngBtn: document.getElementById("savePngBtn"),
+      helpBtn: document.getElementById("helpBtn"),
+      helpOverlay: document.getElementById("helpOverlay"),
+      helpCard: document.getElementById("helpCard"),
+      closeHelp: document.getElementById("closeHelp"),
+      liveTemp: document.getElementById("liveTemp"),
+      nowStatus: document.getElementById("nowStatus"),
+      errorText: document.getElementById("errorText"),
+      graph: document.getElementById("graph"),
+      graphTitle: document.getElementById("graphTitle"),
+      yLabel: document.getElementById("yLabel"),
+      yPanel: document.getElementById("yPanel"),
+      xLabel: document.getElementById("xLabel"),
+      xPanel: document.getElementById("xPanel"),
+      rateSelect: document.getElementById("rateSelect"),
+      minSlider: document.getElementById("minSlider"),
+      maxSlider: document.getElementById("maxSlider"),
+      minVal: document.getElementById("minVal"),
+      maxVal: document.getElementById("maxVal"),
+    };
+
+    const state = {
+      port: null,
+      reader: null,
+      keepReading: false,
+      recording: false,
+      startedAt: null,
+      pausedElapsed: 0,
+      points: [],
+      latestTemp: null,
+      intervalSec: 1,
+      yMin: 0,
+      yMax: 255,
+    };
+
+    function titleText() {
+      return (els.graphTitle.textContent || "").replace(/\s+/g, " ").trim() || "Light over time";
+    }
+
+    function fileStem() {
+      return titleText().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "light-graph";
+    }
+
+    function setError(message) {
+      els.errorText.textContent = message || "";
+    }
+
+    function elapsedSeconds() {
+      if (state.recording && state.startedAt !== null) {
+        return state.pausedElapsed + (Date.now() - state.startedAt) / 1000;
+      }
+      return state.pausedElapsed;
+    }
+
+    function xTickStep(xMax) {
+      const interval = state.intervalSec;
+      const multiples = [1, 2, 5, 10, 20, 30, 60];
+      for (let i = 0; i < multiples.length; i++) {
+        const step = interval * multiples[i];
+        if (xMax / step <= 12) return step;
+      }
+      return interval * 60;
+    }
+
+    function niceXMax() {
+      const last = state.points.length ? state.points[state.points.length - 1].t : 0;
+      const live = state.recording ? Math.max(last, elapsedSeconds()) : last;
+      const minSpan = Math.max(30, state.intervalSec * 5);
+      const span = Math.max(minSpan, live);
+      const step = xTickStep(span);
+      return Math.ceil(span / step) * step;
+    }
+
+    function formatXTick(value) {
+      return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10);
+    }
+
+    function yStep(min, max) {
+      const span = Math.max(1, max - min);
+      const rough = span / 6;
+      const nice = [1, 2, 5, 10, 20, 25, 50];
+      return nice.find((n) => n >= rough) || 50;
+    }
+
+    function yTicks(min, max) {
+      const step = yStep(min, max);
+      const ticks = [];
+      const start = Math.ceil(min / step) * step;
+      for (let y = start; y <= max + 1e-9; y += step) ticks.push(y);
+      if (!ticks.length || ticks[0] !== min) ticks.unshift(min);
+      if (ticks[ticks.length - 1] !== max) ticks.push(max);
+      return ticks;
+    }
+
+    function formatTemp(temp) {
+      return Number.isInteger(temp) ? String(temp) : String(temp);
+    }
+
+    function parseTemp(line) {
+      const trimmed = line.trim();
+      if (!trimmed) return null;
+      const tagged = trimmed.match(/^light\s*,\s*(-?\d+(?:\.\d+)?)\s*$/i);
+      if (tagged) return Number(tagged[1]);
+      const bare = trimmed.match(/^(-?\d+(?:\.\d+)?)$/);
+      if (bare) return Number(bare[1]);
+      return null;
+    }
+
+    function drawGraph(ctx, w, h, title) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+
+      let top = 18;
+      if (title) {
+        ctx.fillStyle = "#1a1a1a";
+        ctx.font = "bold 28px Segoe UI, Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(title, w / 2, 16);
+        top = 58;
+      }
+
+      const plot = { left: 72, right: w - 28, top, bottom: h - 56 };
+      const xMax = niceXMax();
+      const xStep = xTickStep(xMax);
+
+      const yMin = state.yMin;
+      const yMax = state.yMax;
+      const yRange = Math.max(1, yMax - yMin);
+
+      ctx.strokeStyle = "#eceff3";
+      ctx.lineWidth = 1;
+      ctx.font = "14px Segoe UI, Arial";
+      ctx.fillStyle = "#667085";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+
+      yTicks(yMin, yMax).forEach((y) => {
+        const py = plot.bottom - ((y - yMin) / yRange) * (plot.bottom - plot.top);
+        ctx.beginPath();
+        ctx.moveTo(plot.left, py);
+        ctx.lineTo(plot.right, py);
+        ctx.stroke();
+        ctx.fillText(String(y), plot.left - 10, py);
+      });
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      const xTickCount = Math.round(xMax / xStep);
+      for (let i = 0; i <= xTickCount; i++) {
+        const x = i * xStep;
+        const px = plot.left + (x / xMax) * (plot.right - plot.left);
+        ctx.beginPath();
+        ctx.moveTo(px, plot.top);
+        ctx.lineTo(px, plot.bottom);
+        ctx.stroke();
+        ctx.fillText(formatXTick(x), px, plot.bottom + 8);
+      }
+
+      ctx.strokeStyle = "#1a1a1a";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(plot.left, plot.top);
+      ctx.lineTo(plot.left, plot.bottom);
+      ctx.lineTo(plot.right, plot.bottom);
+      ctx.stroke();
+
+      if (title) {
+        ctx.fillStyle = "#1a1a1a";
+        ctx.font = "bold 15px Segoe UI, Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText("Time (s)", (plot.left + plot.right) / 2, h - 16);
+        ctx.save();
+        ctx.translate(22, (plot.top + plot.bottom) / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText("Light (0–255)", 0, 0);
+        ctx.restore();
+      }
+
+      if (!state.points.length) {
+        ctx.fillStyle = "#98a2b3";
+        ctx.font = "16px Segoe UI, Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Press Log to plot light", (plot.left + plot.right) / 2, (plot.top + plot.bottom) / 2);
+        return;
+      }
+
+      const toX = (t) => plot.left + (Math.min(Math.max(t, 0), xMax) / xMax) * (plot.right - plot.left);
+      const toY = (temp) => {
+        const clamped = Math.min(yMax, Math.max(yMin, temp));
+        return plot.bottom - ((clamped - yMin) / yRange) * (plot.bottom - plot.top);
+      };
+
+      ctx.beginPath();
+      state.points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(toX(p.t), toY(p.temp));
+        else ctx.lineTo(toX(p.t), toY(p.temp));
+      });
+      ctx.strokeStyle = "#2f6feb";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      state.points.forEach((p) => {
+        ctx.beginPath();
+        ctx.arc(toX(p.t), toY(p.temp), 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#2f6feb";
+        ctx.stroke();
+      });
+    }
+
+    function drawScreen() {
+      const canvas = els.graph;
+      const ratio = window.devicePixelRatio || 1;
+      const cssW = Math.max(1, canvas.clientWidth || 1000);
+      const cssH = Math.max(1, canvas.clientHeight || 520);
+      const pixelW = Math.round(cssW * ratio);
+      const pixelH = Math.round(cssH * ratio);
+      if (canvas.width !== pixelW || canvas.height !== pixelH) {
+        canvas.width = pixelW;
+        canvas.height = pixelH;
+      }
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      drawGraph(ctx, cssW, cssH, "");
+    }
+
+    function updateButtons() {
+      els.recordBtn.textContent = state.recording ? "Stop" : "Log";
+      els.recordBtn.classList.toggle("recording", state.recording);
+      const showSave = !state.recording && state.points.length > 0;
+      els.saveWrap.classList.toggle("hidden", !showSave);
+      if (!showSave) els.saveMenu.classList.remove("open");
+    }
+
+    function snapTime(seconds) {
+      const step = state.intervalSec;
+      return Math.round(seconds / step) * step;
+    }
+
+    function updateNowDisplay() {
+      const hasTemp = state.latestTemp !== null;
+      els.nowStatus.classList.toggle("hidden", !hasTemp);
+      if (hasTemp) {
+        els.liveTemp.textContent = formatTemp(state.latestTemp);
+      }
+    }
+
+    function addPoint(temp) {
+      state.latestTemp = temp;
+      updateNowDisplay();
+      if (!state.recording) return;
+      if (state.points.length === 0) {
+        state.startedAt = Date.now();
+        state.pausedElapsed = 0;
+        state.points.push({ t: 0, temp, at: new Date() });
+        updateButtons();
+        drawScreen();
+        return;
+      }
+      const last = state.points[state.points.length - 1];
+      const minNext = last.t + state.intervalSec;
+      const elapsed = elapsedSeconds();
+      if (elapsed < minNext) return;
+      const t = Math.max(minNext, snapTime(elapsed));
+      state.points.push({ t, temp, at: new Date() });
+      updateButtons();
+      drawScreen();
+    }
+
+    async function readLoop(port) {
+      const decoder = new TextDecoderStream();
+      const closed = port.readable.pipeTo(decoder.writable);
+      state.reader = decoder.readable.getReader();
+      let buffer = "";
+      try {
+        while (state.keepReading) {
+          const { value, done } = await state.reader.read();
+          if (done) break;
+          buffer += value.replace(/\r/g, "");
+          let newline;
+          while ((newline = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, newline);
+            buffer = buffer.slice(newline + 1);
+            const temp = parseTemp(line);
+            if (temp === null) continue;
+            addPoint(temp);
+          }
+        }
+      } finally {
+        try { await state.reader.cancel(); } catch {}
+        state.reader = null;
+        try { await closed; } catch {}
+        state.port = null;
+        state.latestTemp = null;
+        updateNowDisplay();
+      }
+    }
+
+    async function ensureConnected() {
+      if (state.port) return true;
+      if (!("serial" in navigator)) {
+        setError("Use Chrome or Edge to connect the micro:bit.");
+        return false;
+      }
+      setError("");
+      let port = (await navigator.serial.getPorts()).find((p) => p.getInfo().usbVendorId === MICROBIT.usbVendorId);
+      if (!port) {
+        try {
+          port = await navigator.serial.requestPort({ filters: [MICROBIT] });
+        } catch (err) {
+          if (err && err.name === "NotFoundError") return false;
+          setError(err.message || String(err));
+          return false;
+        }
+      }
+      await port.open({ baudRate: BAUD });
+      state.port = port;
+      state.keepReading = true;
+      readLoop(port).catch((err) => {
+        if (state.keepReading) setError(err.message || String(err));
+      });
+      return true;
+    }
+
+    async function connectQuietly() {
+      if (state.port || !("serial" in navigator)) return;
+      const port = (await navigator.serial.getPorts()).find((p) => p.getInfo().usbVendorId === MICROBIT.usbVendorId);
+      if (!port) return;
+      await port.open({ baudRate: BAUD });
+      state.port = port;
+      state.keepReading = true;
+      readLoop(port).catch((err) => {
+        if (state.keepReading) setError(err.message || String(err));
+      });
+    }
+
+    async function startRecording() {
+      if (state.points.length) {
+        const ok = window.confirm(
+          "Start a new log?\n\nThis will erase all recorded data on the graph."
+        );
+        if (!ok) return;
+      }
+      const connected = await ensureConnected();
+      if (!connected) return;
+      state.points = [];
+      state.pausedElapsed = 0;
+      state.startedAt = Date.now();
+      state.recording = true;
+      if (state.latestTemp !== null) {
+        state.points.push({ t: 0, temp: state.latestTemp, at: new Date() });
+      }
+      updateButtons();
+      drawScreen();
+      tick();
+    }
+
+    function stopRecording() {
+      if (!state.recording) return;
+      state.pausedElapsed = elapsedSeconds();
+      state.recording = false;
+      state.startedAt = null;
+      updateButtons();
+      drawScreen();
+    }
+
+    function tick() {
+      if (!state.recording) return;
+      drawScreen();
+      requestAnimationFrame(tick);
+    }
+
+    function saveCsv() {
+      const rows = ["time_s,light,clock_time"];
+      for (const p of state.points) {
+        rows.push([p.t.toFixed(2), p.temp, p.at.toLocaleTimeString([], { hour12: false })].join(","));
+      }
+      const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileStem() + ".csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function savePng() {
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = 1400;
+      exportCanvas.height = 900;
+      drawGraph(exportCanvas.getContext("2d"), exportCanvas.width, exportCanvas.height, titleText());
+      exportCanvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileStem() + ".png";
+        a.click();
+        URL.revokeObjectURL(url);
+      }, "image/png");
+    }
+
+    function syncRateSelect() {
+      state.intervalSec = Number(els.rateSelect.value);
+    }
+
+    function syncRangeSliders() {
+      let min = Number(els.minSlider.value);
+      let max = Number(els.maxSlider.value);
+      if (min >= max) max = Math.min(255, min + 5);
+      if (min >= max) min = Math.max(0, max - 5);
+      els.minSlider.value = String(min);
+      els.maxSlider.value = String(max);
+      state.yMin = min;
+      state.yMax = max;
+      els.minVal.textContent = String(min);
+      els.maxVal.textContent = String(max);
+      drawScreen();
+    }
+
+    els.recordBtn.addEventListener("click", () => {
+      if (state.recording) stopRecording();
+      else startRecording();
+    });
+    els.saveBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      els.saveMenu.classList.toggle("open");
+    });
+    els.saveCsvBtn.addEventListener("click", () => {
+      els.saveMenu.classList.remove("open");
+      saveCsv();
+    });
+    els.savePngBtn.addEventListener("click", () => {
+      els.saveMenu.classList.remove("open");
+      savePng();
+    });
+    function openHelp() {
+      els.helpOverlay.classList.add("open");
+    }
+    function closeHelp() {
+      els.helpOverlay.classList.remove("open");
+    }
+    els.helpBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openHelp();
+    });
+    els.closeHelp.addEventListener("click", closeHelp);
+    els.helpOverlay.addEventListener("click", closeHelp);
+    els.helpCard.addEventListener("click", (event) => event.stopPropagation());
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeHelp();
+    });
+    els.yLabel.addEventListener("click", (event) => {
+      event.stopPropagation();
+      els.xPanel.classList.remove("open");
+      els.yPanel.classList.toggle("open");
+    });
+    els.yPanel.addEventListener("click", (event) => event.stopPropagation());
+    els.xLabel.addEventListener("click", (event) => {
+      event.stopPropagation();
+      els.yPanel.classList.remove("open");
+      els.xPanel.classList.toggle("open");
+    });
+    els.xPanel.addEventListener("click", (event) => event.stopPropagation());
+    els.xPanel.addEventListener("mousedown", (event) => event.stopPropagation());
+    els.minSlider.addEventListener("input", syncRangeSliders);
+    els.maxSlider.addEventListener("input", syncRangeSliders);
+    els.rateSelect.addEventListener("change", syncRateSelect);
+    document.addEventListener("click", () => {
+      els.saveMenu.classList.remove("open");
+      els.yPanel.classList.remove("open");
+      els.xPanel.classList.remove("open");
+    });
+
+    els.graphTitle.addEventListener("focus", () => {
+      const range = document.createRange();
+      range.selectNodeContents(els.graphTitle);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+    els.graphTitle.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        els.graphTitle.blur();
+      }
+    });
+    els.graphTitle.addEventListener("blur", () => {
+      els.graphTitle.textContent = titleText();
+      document.title = titleText();
+    });
+
+    window.addEventListener("resize", drawScreen);
+    updateNowDisplay();
+    updateButtons();
+    drawScreen();
+    openHelp();
+    connectQuietly().catch(() => {});
+  </script>
+</body>
+</html>
